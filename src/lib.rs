@@ -111,7 +111,7 @@ fn hash_from_end(
     buffer: &mut [u8],
     offset: i64,
 ) -> io::Result<Box<[u8]>> {
-    reader.seek(SeekFrom::End(dbg!(-offset)))?;
+    reader.seek(SeekFrom::End(-offset))?;
     reader.read_exact(buffer)?;
     Ok(hash(buffer))
 }
