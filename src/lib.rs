@@ -7,8 +7,7 @@ use std::convert::TryInto;
 /// Sample size for head and tail segments.
 ///
 /// This sample is 512kb in length, which should be more than sufficient.
-// const SAMPLE_SIZE: i64 = 0x80000;
-const SAMPLE_SIZE: i64 = 4;
+const SAMPLE_SIZE: i64 = 0x80000;
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct Imprint {
@@ -143,8 +142,8 @@ fn get_tail_length(len: u64) -> Option<i64> {
     }
 
     match len as i64 - SAMPLE_SIZE {
-        length if length <= 0 => None,
-        length => Some(cmp::min(length, SAMPLE_SIZE)),
+        len if len <= 0 => None,
+        len => Some(cmp::min(len, SAMPLE_SIZE)),
     }
 }
 
