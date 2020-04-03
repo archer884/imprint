@@ -16,6 +16,16 @@ pub struct Imprint {
     tail: Option<Box<[u8]>>,
 }
 
+impl Imprint {
+    pub fn path(&self) -> &Path {
+        &self.meta.path
+    }
+
+    pub fn len(&self) -> u64 {
+        self.meta.length
+    }
+}
+
 /// Represents file metadata relevant to an Imprint.
 ///
 /// This struct represents a file path and its length. Other metadata items are ignored.
@@ -26,6 +36,14 @@ pub struct Metadata {
 }
 
 impl Metadata {
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
+    pub fn len(&self) -> u64 {
+        self.length
+    }
+
     pub fn from_path(path: impl AsRef<Path> + Into<PathBuf>) -> io::Result<Self> {
         let metadata = fs::metadata(path.as_ref())?;
         if !metadata.is_file() {
