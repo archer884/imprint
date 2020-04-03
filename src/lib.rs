@@ -2,6 +2,7 @@ use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::{cmp, fs, io};
 use std::hash::{Hash, Hasher};
+use std::convert::TryInto;
 
 /// Sample size for head and tail segments.
 ///
@@ -58,8 +59,12 @@ impl Metadata {
             length: metadata.len(),
         })
     }
+}
 
-    pub fn imprint(self) -> io::Result<Imprint> {
+impl TryInto<Imprint> for Metadata {
+    type Error = io::Error;
+
+    fn try_into(self) -> io::Result<Imprint> {
         use std::fs::File;
 
         let mut reader = File::open(&self.path)?;
