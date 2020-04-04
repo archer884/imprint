@@ -9,7 +9,7 @@ use std::convert::TryInto;
 /// This sample is 512kb in length, which should be more than sufficient.
 const SAMPLE_SIZE: i64 = 0x80000;
 
-#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+#[derive(Clone, Debug, Eq)]
 pub struct Imprint {
     meta: Metadata,
     head: Box<[u8]>,
@@ -23,6 +23,20 @@ impl Imprint {
 
     pub fn len(&self) -> u64 {
         self.meta.length
+    }
+}
+
+impl PartialEq for Imprint {
+    fn eq(&self, other: &Self) -> bool {
+        self.meta == other.meta && self.head == other.head && self.tail == other.tail
+    }
+}
+
+impl Hash for Imprint {
+    fn hash<H: Hasher>(&self, h: &mut H) {
+        self.meta.hash(h);
+        self.head.hash(h);
+        self.tail.hash(h);
     }
 }
 
