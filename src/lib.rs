@@ -1,117 +1,51 @@
 use std::io::{Read, Seek, SeekFrom};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::{cmp, fs, io};
-use std::hash::{Hash, Hasher};
-use std::convert::TryInto;
 
 /// Sample size for head and tail segments.
 ///
 /// This sample is 512kb in length, which should be more than sufficient.
 const SAMPLE_SIZE: i64 = 0x80000;
 
-#[derive(Clone, Debug, Eq)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct Imprint {
-    meta: Metadata,
     head: Box<[u8]>,
     tail: Option<Box<[u8]>>,
 }
 
 impl Imprint {
-    pub fn path(&self) -> &Path {
-        &self.meta.path
-    }
-
-    pub fn len(&self) -> u64 {
-        self.meta.length
-    }
-}
-
-impl PartialEq for Imprint {
-    fn eq(&self, other: &Self) -> bool {
-        self.meta == other.meta && self.head == other.head && self.tail == other.tail
-    }
-}
-
-impl Hash for Imprint {
-    fn hash<H: Hasher>(&self, h: &mut H) {
-        self.meta.hash(h);
-        self.head.hash(h);
-        self.tail.hash(h);
-    }
-}
-
-/// Represents file metadata relevant to an Imprint.
-///
-/// This struct represents a file path and its length. Other metadata items are ignored.
-#[derive(Clone, Debug, Eq)]
-pub struct Metadata {
-    path: PathBuf,
-    length: u64,
-}
-
-impl Metadata {
-    pub fn path(&self) -> &Path {
-        &self.path
-    }
-
-    pub fn len(&self) -> u64 {
-        self.length
-    }
-
-    pub fn from_path(path: impl AsRef<Path> + Into<PathBuf>) -> io::Result<Self> {
-        let metadata = fs::metadata(path.as_ref())?;
-        if !metadata.is_file() {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                "Path does not reference a file",
-            ));
-        }
-
-        Ok(Metadata {
-            path: path.into(),
-            length: metadata.len(),
-        })
-    }
-}
-
-impl TryInto<Imprint> for Metadata {
-    type Error = io::Error;
-
-    fn try_into(self) -> io::Result<Imprint> {
+    pub fn new(path: impl AsRef<Path>) -> io::Result<Self> {
         use std::fs::File;
 
-        let mut reader = File::open(&self.path)?;
+        let len = read_len(path.as_ref())?;
+        let mut reader = File::open(path)?;
         let mut buffer = vec![0; SAMPLE_SIZE as usize].into_boxed_slice();
 
         let head = hash_from_start(
             &mut reader,
-            &mut buffer[..get_head_length(self.length) as usize],
+            &mut buffer[..get_head_length(len) as usize],
         )?;
 
-        let tail = get_tail_length(self.length)
+        let tail = get_tail_length(len)
             .map(|len| hash_from_end(&mut reader, &mut buffer[..len as usize], len))
             .transpose()?;
 
         Ok(Imprint {
-            meta: self,
             head,
             tail,
         })
     }
 }
 
-// Metadata for a given file is considered equivalent if both files have the same length.
-impl PartialEq for Metadata {
-    fn eq(&self, other: &Self) -> bool {
-        self.length == other.length
+fn read_len(path: &Path) -> io::Result<u64> {
+    let metadata = fs::metadata(path)?;
+    if !metadata.is_file() {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "Path does not reference a file",
+        ));
     }
-}
-
-// Because we have a custom PartialEq implementation, we need a custom Hash implementation.
-impl Hash for Metadata {
-    fn hash<H: Hasher>(&self, h: &mut H) {
-        self.length.hash(h);
-    }
+    Ok(metadata.len())
 }
 
 fn hash_from_start(reader: &mut impl Read, buffer: &mut [u8]) -> io::Result<Box<[u8]>> {
