@@ -9,8 +9,8 @@ const SAMPLE_SIZE: i64 = 0x80000;
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct Imprint {
-    head: Box<[u8]>,
-    tail: Option<Box<[u8]>>,
+    pub head: Box<[u8]>,
+    pub tail: Option<Box<[u8]>>,
 }
 
 impl Imprint {
