@@ -21,19 +21,13 @@ impl Imprint {
         let mut reader = File::open(path)?;
         let mut buffer = vec![0; SAMPLE_SIZE as usize].into_boxed_slice();
 
-        let head = hash_from_start(
-            &mut reader,
-            &mut buffer[..get_head_length(len) as usize],
-        )?;
+        let head = hash_from_start(&mut reader, &mut buffer[..get_head_length(len) as usize])?;
 
         let tail = get_tail_length(len)
             .map(|len| hash_from_end(&mut reader, &mut buffer[..len as usize], len))
             .transpose()?;
 
-        Ok(Imprint {
-            head,
-            tail,
-        })
+        Ok(Imprint { head, tail })
     }
 }
 
@@ -68,9 +62,9 @@ fn hash(s: &[u8]) -> Box<[u8]> {
 
     // I can't stand GenericArray.
     let mut hasher = Sha256::new();
-    hasher.input(s);
+    hasher.update(s);
     hasher
-        .result()
+        .finalize()
         .into_iter()
         .collect::<Vec<_>>()
         .into_boxed_slice()
