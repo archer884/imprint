@@ -1,6 +1,12 @@
-use std::io::{Read, Seek, SeekFrom};
-use std::path::Path;
-use std::{cmp, fs, io};
+use std::{
+    cmp,
+    fmt::Display,
+    fs, io,
+    io::{Cursor, Read, Seek, SeekFrom},
+    path::Path,
+};
+
+use blake3::{Hash, Hasher};
 
 /// Sample size for head and tail segments.
 ///
@@ -9,8 +15,8 @@ const SAMPLE_SIZE: i64 = 0x80000;
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct Imprint {
-    pub head: Box<[u8]>,
-    pub tail: Option<Box<[u8]>>,
+    head: Hash,
+    tail: Option<Hash>,
 }
 
 impl Imprint {
@@ -22,12 +28,17 @@ impl Imprint {
         let mut buffer = vec![0; SAMPLE_SIZE as usize].into_boxed_slice();
 
         let head = hash_from_start(&mut reader, &mut buffer[..get_head_length(len) as usize])?;
-
         let tail = get_tail_length(len)
             .map(|len| hash_from_end(&mut reader, &mut buffer[..len as usize], len))
             .transpose()?;
 
         Ok(Imprint { head, tail })
+    }
+}
+
+impl Display for Imprint {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.head.fmt(f)
     }
 }
 
@@ -42,7 +53,7 @@ fn read_len(path: &Path) -> io::Result<u64> {
     Ok(metadata.len())
 }
 
-fn hash_from_start(reader: &mut impl Read, buffer: &mut [u8]) -> io::Result<Box<[u8]>> {
+fn hash_from_start(reader: &mut impl Read, buffer: &mut [u8]) -> io::Result<Hash> {
     reader.read_exact(buffer)?;
     Ok(hash(buffer))
 }
@@ -51,23 +62,17 @@ fn hash_from_end(
     reader: &mut (impl Read + Seek),
     buffer: &mut [u8],
     offset: i64,
-) -> io::Result<Box<[u8]>> {
+) -> io::Result<Hash> {
     reader.seek(SeekFrom::End(-offset))?;
     reader.read_exact(buffer)?;
     Ok(hash(buffer))
 }
 
-fn hash(s: &[u8]) -> Box<[u8]> {
-    use sha2::{digest::Digest, Sha256};
-
-    // I can't stand GenericArray.
-    let mut hasher = Sha256::new();
-    hasher.update(s);
-    hasher
-        .finalize()
-        .into_iter()
-        .collect::<Vec<_>>()
-        .into_boxed_slice()
+fn hash(s: &[u8]) -> Hash {
+    let mut hasher = Hasher::new();
+    let mut cursor = Cursor::new(s);
+    io::copy(&mut cursor, &mut hasher).unwrap();
+    hasher.finalize()
 }
 
 fn get_head_length(len: u64) -> i64 {
@@ -100,10 +105,8 @@ mod tests {
         let message = "In the beginning, God created the heaven and the earth.";
         let mut reader = Cursor::new(&message);
         let mut buf = String::new();
-
         reader.seek(SeekFrom::End(-6))?;
         reader.read_to_string(&mut buf)?;
-
         assert_eq!("earth.", buf);
         Ok(())
     }
