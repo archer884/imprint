@@ -73,21 +73,3 @@ fn hash_tail(
     reader.read_exact(buf)?;
     Ok(Some(Hasher::new().update(buf).finalize()))
 }
-
-#[cfg(test)]
-mod tests {
-    use std::io::{self, Cursor, Read, Seek, SeekFrom};
-
-    // This test demonstrates the correct use of SeekFrom. It does not relate to any library
-    // function; it is just here as a reference.
-    #[test]
-    fn seek() -> io::Result<()> {
-        let message = "In the beginning, God created the heaven and the earth.";
-        let mut reader = Cursor::new(&message);
-        let mut buf = String::new();
-        reader.seek(SeekFrom::End(-6))?;
-        reader.read_to_string(&mut buf)?;
-        assert_eq!("earth.", buf);
-        Ok(())
-    }
-}
