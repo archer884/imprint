@@ -1,8 +1,8 @@
 use std::{
-    cmp,
     fmt::Display,
-    fs, io,
-    io::{Cursor, Read, Seek, SeekFrom},
+    fs,
+    io::{self, BufReader},
+    io::{Read, Seek, SeekFrom},
     path::Path,
 };
 
@@ -11,7 +11,7 @@ use blake3::{Hash, Hasher};
 /// Sample size for head and tail segments.
 ///
 /// This sample is 512kb in length, which should be more than sufficient.
-const SAMPLE_SIZE: i64 = 0x80000;
+const SAMPLE_SIZE: u64 = 0x80000;
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct Imprint {
@@ -23,16 +23,24 @@ impl Imprint {
     pub fn new(path: impl AsRef<Path>) -> io::Result<Self> {
         use std::fs::File;
 
-        let len = read_len(path.as_ref())?;
-        let mut reader = File::open(path)?;
+        let path = path.as_ref();
+        let meta = fs::metadata(path)?;
+        if !meta.is_file() {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "received a directory when expecting a file",
+            ));
+        }
+
+        let len = meta.len();
+        let mut reader =
+            File::open(path).map(|f| BufReader::with_capacity(SAMPLE_SIZE as usize, f))?;
         let mut buffer = vec![0; SAMPLE_SIZE as usize].into_boxed_slice();
 
-        let head = hash_from_start(&mut reader, &mut buffer[..get_head_length(len) as usize])?;
-        let tail = get_tail_length(len)
-            .map(|len| hash_from_end(&mut reader, &mut buffer[..len as usize], len))
-            .transpose()?;
-
-        Ok(Imprint { head, tail })
+        Ok(Imprint {
+            head: hash_head(&mut reader, &mut buffer, len)?,
+            tail: hash_tail(&mut reader, &mut buffer, len)?,
+        })
     }
 }
 
@@ -42,56 +50,28 @@ impl Display for Imprint {
     }
 }
 
-fn read_len(path: &Path) -> io::Result<u64> {
-    let metadata = fs::metadata(path)?;
-    if !metadata.is_file() {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "Path does not reference a file",
-        ));
-    }
-    Ok(metadata.len())
+fn hash_head(reader: &mut impl Read, buf: &mut [u8], len: u64) -> io::Result<Hash> {
+    let len = len.min(SAMPLE_SIZE) as usize;
+    let buf = &mut buf[..len];
+    reader.read_exact(buf)?;
+    Ok(Hasher::new().update(buf).finalize())
 }
 
-fn hash_from_start(reader: &mut impl Read, buffer: &mut [u8]) -> io::Result<Hash> {
-    reader.read_exact(buffer)?;
-    Ok(hash(buffer))
-}
-
-fn hash_from_end(
+fn hash_tail(
     reader: &mut (impl Read + Seek),
-    buffer: &mut [u8],
-    offset: i64,
-) -> io::Result<Hash> {
-    reader.seek(SeekFrom::End(-offset))?;
-    reader.read_exact(buffer)?;
-    Ok(hash(buffer))
-}
-
-fn hash(s: &[u8]) -> Hash {
-    let mut hasher = Hasher::new();
-    let mut cursor = Cursor::new(s);
-    io::copy(&mut cursor, &mut hasher).unwrap();
-    hasher.finalize()
-}
-
-fn get_head_length(len: u64) -> i64 {
-    if len > i64::max_value() as u64 {
-        SAMPLE_SIZE
-    } else {
-        cmp::min(len as i64, SAMPLE_SIZE)
-    }
-}
-
-fn get_tail_length(len: u64) -> Option<i64> {
-    if len > i64::max_value() as u64 {
-        return Some(SAMPLE_SIZE);
+    buf: &mut [u8],
+    len: u64,
+) -> io::Result<Option<Hash>> {
+    let tail_len = len.saturating_sub(SAMPLE_SIZE);
+    if tail_len == 0 {
+        return Ok(None);
     }
 
-    match len as i64 - SAMPLE_SIZE {
-        len if len <= 0 => None,
-        len => Some(cmp::min(len, SAMPLE_SIZE)),
-    }
+    let len = tail_len.min(SAMPLE_SIZE) as usize;
+    let buf = &mut buf[..len];
+    reader.seek(SeekFrom::End(-(len as i64)))?;
+    reader.read_exact(buf)?;
+    Ok(Some(Hasher::new().update(buf).finalize()))
 }
 
 #[cfg(test)]
