@@ -1,8 +1,7 @@
 use std::{
     fmt::Display,
     fs,
-    io::{self, BufReader},
-    io::{Read, Seek, SeekFrom},
+    io::{self, Read, Seek, SeekFrom},
     path::Path,
 };
 
