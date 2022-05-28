@@ -10,8 +10,8 @@ use blake3::{Hash, Hasher};
 
 /// Sample size for head and tail segments.
 ///
-/// This sample is 512kb in length, which should be more than sufficient.
-const SAMPLE_SIZE: u64 = 0x80000;
+/// This sample is 128kb in length, which should be more than sufficient.
+const SAMPLE_SIZE: u64 = 0x20000;
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct Imprint {
@@ -33,8 +33,7 @@ impl Imprint {
         }
 
         let len = meta.len();
-        let mut reader =
-            File::open(path).map(|f| BufReader::with_capacity(SAMPLE_SIZE as usize, f))?;
+        let mut reader = File::open(path)?;
         let mut buffer = vec![0; SAMPLE_SIZE as usize].into_boxed_slice();
 
         Ok(Imprint {
