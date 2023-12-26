@@ -1,7 +1,7 @@
 use std::{
     fmt::Display,
     fs,
-    io::{self, Read, Seek, SeekFrom},
+    io::{self, Cursor, Read, Seek, SeekFrom},
     path::Path,
 };
 
@@ -33,6 +33,17 @@ impl Imprint {
 
         let len = meta.len();
         let mut reader = File::open(path)?;
+        let mut buffer = vec![0; SAMPLE_SIZE as usize].into_boxed_slice();
+
+        Ok(Imprint {
+            head: hash_head(&mut reader, &mut buffer, len)?,
+            tail: hash_tail(&mut reader, &mut buffer, len)?,
+        })
+    }
+
+    pub fn from_memory(buf: &[u8]) -> io::Result<Self> {
+        let len = buf.len() as u64;
+        let mut reader = Cursor::new(buf);
         let mut buffer = vec![0; SAMPLE_SIZE as usize].into_boxed_slice();
 
         Ok(Imprint {
